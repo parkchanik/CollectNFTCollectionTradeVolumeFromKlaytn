@@ -108,7 +108,7 @@ func main() {
 
 func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 
-	var minKlayValue int = 10000000 // 500000000 5 klay , 1000000000 10 klay 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
+	//var minKlayValue int = 10000000 // 500000000 5 klay , 1000000000 10 klay 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
 	//2149000000000000000000
 	//100000000000000000000
 
@@ -160,11 +160,11 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 
 		}
 
-		wrapTokenSymbol, err := instance.Symbol(&bind.CallOpts{})
-		if err != nil {
-			logger.InfoLog("----Error Symbol TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+		// wrapTokenSymbol, err := instance.Symbol(&bind.CallOpts{})
+		// if err != nil {
+		// 	logger.InfoLog("----Error Symbol TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
 
-		}
+		// }
 
 		kip7Transfer, err := instance.ParseTransfer(m)
 		if err != nil {
@@ -185,28 +185,26 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 		//2149000000000000000000
 
 		//var tokenid int64 = 0
-		if wklayint >= minKlayValue {
-			// 특정 klay 이상 value 만 체크
-			txhashinfo, ex := TxHashInfo[mtxhash]
-			if !ex {
-				info := &Info{}
-				info.BlockNumber = m.BlockNumber
-				info.Klay = wklayint
-				info.WrapTokenName = wrapTokenName
-				info.WrapTokenSymbol = wrapTokenSymbol
-				info.WrapTokenAddress = wrapTokenAddress
+		txhashinfo, ex := TxHashInfo[mtxhash]
+		if !ex {
+			info := &Info{}
+			info.BlockNumber = m.BlockNumber
+			info.Klay = wklayint
+			info.WrapTokenName = wrapTokenName
+			//info.WrapTokenSymbol = wrapTokenSymbol
+			info.WrapTokenAddress = wrapTokenAddress
 
-				TxHashInfo[mtxhash] = info
-			} else {
+			TxHashInfo[mtxhash] = info
+		} else {
 
-				if txhashinfo.Klay < wklayint { // 등록 되어있는 klay 가 작으면 새로 수정
-					txhashinfo.Klay = wklayint
-				}
+			if txhashinfo.Klay < wklayint { // 등록 되어있는 klay 가 작으면 새로 수정
+				txhashinfo.Klay = wklayint
 			}
-
 		}
 
 	} // for
+
+	CollectionInfoList := make(map[string]*CollectionInfo, 0)
 
 	for txHash, info := range TxHashInfo {
 
@@ -217,7 +215,7 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 		txhash := txHash
 
 		wklayint := info.Klay
-		wklayLast := fmt.Sprintf("%f", float64(wklayint)/100000000)
+		//wklayLast := fmt.Sprintf("%f", float64(wklayint)/100000000)
 
 		block, err := klaytndial.BlockByNumber(context.Background(), blocknumNew)
 		if err != nil {
@@ -225,7 +223,8 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 		}
 
 		blocktime := block.Time().Int64()
-		blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+		//blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+		blocktimeYYYYMMDD := time.Unix(blocktime, 0).Format("2006-01-02")
 
 		// 해당 트랜잭션의 영수증
 		rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
@@ -233,9 +232,6 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 			logger.InfoLog("!!!!!!!!!!!!!!!!!!!!!!!!!!TransactionReceiptt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
 			continue
 		}
-
-		//var cName string = ""
-		//var cSymbol string = ""
 
 		for _, log := range rept.Logs {
 
@@ -265,34 +261,45 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 					logger.InfoLog("----Error kip17instance Symbol Error[%s]\n", err.Error())
 				}
 
-				cName := name
-				cSymbol := symbol
-				tokenID := kip17transfer.TokenId.Int64()
-				cAddress := log.Address
+				collectionKey := fmt.Sprintf("%s_%s", blocktimeYYYYMMDD, log.Address.Hex())
+				tokenIDStr := kip17transfer.TokenId.String()
 
-				tokeninfo := &TokenInfo{}
+				collectioninfo, excollect := CollectionInfoList[collectionKey]
+				if !excollect {
+					cinfo := &CollectionInfo{}
+					cinfo.CollectionName = name
+					cinfo.CollectionSymbol = symbol
+					cinfo.Contractaddress = log.Address
+					cinfo.Klay = uint64(wklayint)
 
-				tokeninfo.BlockTime = blocktimestring
-				tokeninfo.TransactionHash = txhash
-				tokeninfo.ContractName = cName
-				tokeninfo.Contractaddress = cAddress
-				tokeninfo.ContractSymbol = cSymbol
+					wklayFloat := fmt.Sprintf("%f", float64(wklayint)/100000000)
+					cinfo.KlayFloat = wklayFloat
 
-				tokenIDStr := fmt.Sprintf("%d", tokenID)
-				tokeninfo.TokenID = tokenIDStr
+					cinfo.TradeTransactinCount = 1
 
-				tokeninfo.WrapTokenAddress = info.WrapTokenAddress
-				tokeninfo.WrapTokenName = info.WrapTokenName
-				tokeninfo.WrapTokenSymbol = info.WrapTokenSymbol
-				tokeninfo.KlayValue = wklayLast
+					cinfo.TokenIDs = make([]string, 0)
+					cinfo.TokenIDs = append(cinfo.TokenIDs, tokenIDStr)
 
-				PrintTokenData(tokeninfo)
+					cinfo.FromToBlockNumber = fmt.Sprintf("%d_%d", fromBlockNumber, toBlockNumber)
+
+					CollectionInfoList[collectionKey] = cinfo
+				} else {
+					totalklayint := collectioninfo.Klay + uint64(wklayint)
+					collectioninfo.Klay = totalklayint
+
+					wklayFloat := fmt.Sprintf("%f", float64(totalklayint)/100000000)
+					collectioninfo.KlayFloat = wklayFloat
+					collectioninfo.TradeTransactinCount = collectioninfo.TradeTransactinCount + 1
+					collectioninfo.TokenIDs = append(collectioninfo.TokenIDs, tokenIDStr)
+				}
 
 			}
 
 		}
 
 	}
+
+	PrintCollectionInfoData(CollectionInfoList)
 
 }
 
@@ -315,43 +322,38 @@ func ChangeWklayValue(ValueString string) int {
 
 }
 
-func PrintTokenData(logdata *TokenInfo) {
+func PrintCollectionInfoData(collectionlist map[string]*CollectionInfo) {
 
-	transaction := logdata.TransactionHash.Hex()
-	blockTime := logdata.BlockTime[:10]
-	contractAddress := logdata.Contractaddress.Hex()
-	contractName := logdata.ContractName
-	contractSymbol := logdata.ContractSymbol
-	tokenID := logdata.TokenID
+	for key, value := range collectionlist {
 
-	wrapTokenAddress := logdata.WrapTokenAddress.Hex()
-	wrapTokenName := logdata.WrapTokenName
-	wrapTokenSymbol := logdata.WrapTokenSymbol
-	klayValue := logdata.KlayValue //float64
+		var b bytes.Buffer
 
-	var b bytes.Buffer
+		b.WriteString(key)
+		b.WriteString(",")
+		b.WriteString(value.CollectionName)
+		b.WriteString(",")
+		b.WriteString(value.CollectionSymbol)
+		b.WriteString(",")
+		b.WriteString(value.Contractaddress.Hex())
+		b.WriteString(",")
+		b.WriteString(fmt.Sprintf("%d", value.Klay))
+		b.WriteString(",")
+		b.WriteString(value.KlayFloat)
+		b.WriteString(",")
 
-	b.WriteString(blockTime)
-	b.WriteString(",")
-	b.WriteString(transaction)
-	b.WriteString(",")
-	b.WriteString(contractAddress)
-	b.WriteString(",")
-	b.WriteString(contractName)
-	b.WriteString(",")
-	b.WriteString(contractSymbol)
-	b.WriteString(",")
-	b.WriteString(tokenID)
-	b.WriteString(",")
+		b.WriteString(fmt.Sprintf("%d", value.TradeTransactinCount))
+		b.WriteString(",")
 
-	b.WriteString(wrapTokenAddress)
-	b.WriteString(",")
-	b.WriteString(wrapTokenName)
-	b.WriteString(",")
-	b.WriteString(wrapTokenSymbol)
-	b.WriteString(",")
-	b.WriteString(klayValue)
+		b.WriteString(value.FromToBlockNumber)
+		b.WriteString(",")
 
-	logger.TokenLog(b.String())
+		for _, tokenid := range value.TokenIDs {
+			b.WriteString(tokenid)
+			b.WriteString("-")
+		}
+
+		logger.TokenLog(b.String())
+
+	}
 
 }

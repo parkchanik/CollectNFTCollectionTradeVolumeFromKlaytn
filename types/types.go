@@ -20,7 +20,18 @@ type TokenInfo struct {
 type Info struct {
 	BlockNumber      uint64
 	WrapTokenName    string
-	WrapTokenSymbol  string
 	WrapTokenAddress common.Address
 	Klay             int
+	//WrapTokenSymbol  string
+}
+
+type CollectionInfo struct {
+	Contractaddress      common.Address
+	CollectionName       string
+	CollectionSymbol     string
+	TradeTransactinCount int
+	Klay                 uint64
+	KlayFloat            string
+	TokenIDs             []string
+	FromToBlockNumber    string
 }
